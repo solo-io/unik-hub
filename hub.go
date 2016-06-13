@@ -3,7 +3,6 @@ package main
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/emc-advanced-dev/unik/pkg/types"
-	"time"
 	"io/ioutil"
 	"os"
 	"io"
@@ -13,25 +12,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"encoding/json"
 )
-
-var images = []*types.Image{
-	&types.Image{
-		Id: "id1",
-		Name: "example_image_1",
-		SizeMb: 1234,
-		Infrastructure: types.Infrastructure_VIRTUALBOX,
-		Created: time.Now(),
-		StageSpec: types.StageSpec{
-			ImageFormat: types.ImageFormat_VMDK,
-		},
-		RunSpec: types.RunSpec{
-			DeviceMappings: []types.DeviceMapping{
-				types.DeviceMapping{"/", "/dev/sd0"},
-			},
-			DefaultInstanceMemory: 128,
-		},
-	},
-}
 
 func main(){
 	startServer()
