@@ -10,6 +10,15 @@ The UnikHub muist be started with the following environment variables:
 
 The client can use s3manager to upload and download objects with multiple thread.
 
+Import the following:
+
+``
+"github.com/djannot/aws-sdk-go/aws"
+"github.com/djannot/aws-sdk-go/aws/session"
+"github.com/djannot/aws-sdk-go/service/s3"
+"github.com/djannot/aws-sdk-go/service/s3/s3manager"
+```
+
 Example to upload an object:
 
 ```
