@@ -12,12 +12,17 @@ The client can use s3manager to upload and download objects with multiple thread
 
 Import the following:
 
-``
+```
 "github.com/djannot/aws-sdk-go/aws"
 "github.com/djannot/aws-sdk-go/aws/session"
 "github.com/djannot/aws-sdk-go/service/s3"
 "github.com/djannot/aws-sdk-go/service/s3/s3manager"
 ```
+
+The following files have been modified from the original aws-sdk-go repo:
+
+- private/signer/v4/v4.go to call function of private/signer/v4/unik.go (a new file)
+- service/s3/api.go to add a Password field (to allow sending the password with the X-Amz-Meta-Unik-Password header for GET requests)
 
 Example to upload an object:
 
