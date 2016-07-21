@@ -4,6 +4,12 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/json"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/emc-advanced-dev/unik/pkg/types"
+	"github.com/gin-gonic/gin"
+	"github.com/pborman/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"io"
 	"io/ioutil"
@@ -12,44 +18,38 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/emc-advanced-dev/unik/pkg/types"
-	"github.com/gin-gonic/gin"
-	"github.com/pborman/uuid"
 )
 
 var awsAccessKeyId, awsSecretAccessKey, awsRegion, awsBucket string
 
-func main(){
+func main() {
 	startServer()
 }
 
 type RequestToValidate struct {
-  Method string `json:"method"`
-  Path string `json:"path"`
-	Query url.Values `json:"query"`
+	Method string      `json:"method"`
+	Path   string      `json:"path"`
+	Query  url.Values  `json:"query"`
 	Header http.Header `json:"headers"`
 }
 
 type ValidationResponse struct {
-  Message string `json:"message"`
+	Message     string `json:"message"`
 	AccessKeyID string `json:"access_key_id"`
-	Region string `json:"region"`
-	Bucket string `json:"bucket"`
+	Region      string `json:"region"`
+	Bucket      string `json:"bucket"`
 }
 
 type RequestToSign struct {
-  FormattedShortTime string `json:"formatted_short_time"`
-	ServiceName string `json:"service_name"`
-	StringToSign string `json:"string_to_sign"`
+	FormattedShortTime string `json:"formatted_short_time"`
+	ServiceName        string `json:"service_name"`
+	StringToSign       string `json:"string_to_sign"`
 }
 
 type AWSCredentials struct {
-  AccessKeyID string `json:"access_key_id"`
-	Region string `json:"region"`
-  Signature []byte `json:"signature"`
+	AccessKeyID string `json:"access_key_id"`
+	Region      string `json:"region"`
+	Signature   []byte `json:"signature"`
 }
 
 func makeHmac(key []byte, data []byte) []byte {
@@ -58,7 +58,7 @@ func makeHmac(key []byte, data []byte) []byte {
 	return hash.Sum(nil)
 }
 
-func startServer(){
+func startServer() {
 	// Check if the s3 environment variables have been provided
 	awsAccessKeyId = os.Getenv("AWS_ACCESS_KEY_ID")
 	if awsAccessKeyId == "" {
@@ -83,12 +83,12 @@ func startServer(){
 		// Exctract the information sent by the UnikHubClient
 		req := c.Request
 		decoder := json.NewDecoder(req.Body)
-    var requestToValidate RequestToValidate
-    err := decoder.Decode(&requestToValidate)
-    if err != nil {
+		var requestToValidate RequestToValidate
+		err := decoder.Decode(&requestToValidate)
+		if err != nil {
 			c.Error(err)
 			return
-    }
+		}
 		method := requestToValidate.Method
 		path := requestToValidate.Path
 		password := requestToValidate.Header.Get("X-Amz-Meta-Unik-Password")
@@ -103,7 +103,7 @@ func startServer(){
 			return
 		}
 		user := strings.Split(path, "/")[2]
-	 	image := strings.Split(path, "/")[3]
+		image := strings.Split(path, "/")[3]
 		version := strings.Split(path, "/")[4]
 
 		// If this is a UnikHubClient push request (and not a part or the completion of a multipart upload)
@@ -123,30 +123,30 @@ func startServer(){
 			}
 			// Send a Head request for the object user
 			params := &s3.HeadObjectInput{
-		    Bucket: aws.String(awsBucket),
-		    Key: aws.String(user),
+				Bucket: aws.String(awsBucket),
+				Key:    aws.String(user),
 			}
 			resp, headErr := svc.HeadObject(params)
 			if headErr != nil {
 				// If the object user doesn't exist, this is the first push request executed by this user
 				// The object user must be created
-		    // Hashing the password with the default cost of 10
-		    hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-		    if err != nil {
+				// Hashing the password with the default cost of 10
+				hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+				if err != nil {
 					c.JSON(401, ValidationResponse{
 						Message: "Can't generate the hash based on the password provided for the user: " + err.Error(),
 					})
 					return
-		    }
+				}
 				if strings.Contains(headErr.Error(), "status code: 404") {
 					params := &s3.PutObjectInput{
-				    Bucket: aws.String(awsBucket),
-				    Key: aws.String(user),
+						Bucket: aws.String(awsBucket),
+						Key:    aws.String(user),
 						Metadata: map[string]*string{
-		          "unik-password": aws.String(string(hashedPassword)),
-		          "unik-email": aws.String(email),
-		    			"unik-access": aws.String(access),
-		    		},
+							"unik-password": aws.String(string(hashedPassword)),
+							"unik-email":    aws.String(email),
+							"unik-access":   aws.String(access),
+						},
 					}
 					_, err := svc.PutObject(params)
 					if err != nil {
@@ -159,9 +159,9 @@ func startServer(){
 					c.JSON(401, ValidationResponse{
 						Message: "Can't check the user credentials: " + err.Error(),
 					})
-				  return
+					return
 				}
-			// If the object user exists, check if the password provided it the correct one
+				// If the object user exists, check if the password provided it the correct one
 			} else {
 				err = bcrypt.CompareHashAndPassword([]byte(*resp.Metadata["Unik-Password"]), []byte(password))
 				if err != nil {
@@ -177,8 +177,8 @@ func startServer(){
 		if method == "GET" {
 			// Send a Head request for the object user
 			params := &s3.HeadObjectInput{
-		    Bucket: aws.String(awsBucket),
-		    Key: aws.String(user + "/"  + image + "/" + version),
+				Bucket: aws.String(awsBucket),
+				Key:    aws.String(user + "/" + image + "/" + version),
 			}
 			resp, headErr := svc.HeadObject(params)
 			if headErr != nil {
@@ -189,7 +189,7 @@ func startServer(){
 					})
 					return
 				}
-			// If the object user/image/version exists, checking the if the access is public or private
+				// If the object user/image/version exists, checking the if the access is public or private
 			} else {
 				// Checking if a correct access has been defined for the object
 				if *resp.Metadata["Unik-Access"] != "public" && *resp.Metadata["Unik-Access"] != "private" {
@@ -207,15 +207,15 @@ func startServer(){
 						return
 					}
 					params := &s3.HeadObjectInput{
-				    Bucket: aws.String(awsBucket),
-				    Key: aws.String(user),
+						Bucket: aws.String(awsBucket),
+						Key:    aws.String(user),
 					}
 					resp, headErr := svc.HeadObject(params)
 					if headErr != nil {
 						c.JSON(401, ValidationResponse{
 							Message: "Can't check the user credentials: " + err.Error(),
 						})
-					  return
+						return
 					}
 					err = bcrypt.CompareHashAndPassword([]byte(*resp.Metadata["Unik-Password"]), []byte(password))
 					if err != nil {
@@ -230,8 +230,8 @@ func startServer(){
 
 		validationResponse := ValidationResponse{
 			AccessKeyID: awsAccessKeyId,
-			Region: awsRegion,
-			Bucket: awsBucket,
+			Region:      awsRegion,
+			Bucket:      awsBucket,
 		}
 
 		c.JSON(200, validationResponse)
@@ -240,12 +240,12 @@ func startServer(){
 	r.POST("/sign", func(c *gin.Context) {
 		req := c.Request
 		decoder := json.NewDecoder(req.Body)
-    var requestToSign RequestToSign
-    err := decoder.Decode(&requestToSign)
-    if err != nil {
+		var requestToSign RequestToSign
+		err := decoder.Decode(&requestToSign)
+		if err != nil {
 			c.Error(err)
 			return
-    }
+		}
 		date := makeHmac([]byte("AWS4"+awsSecretAccessKey), []byte(requestToSign.FormattedShortTime))
 		region := makeHmac(date, []byte(awsRegion))
 		service := makeHmac(region, []byte(requestToSign.ServiceName))
@@ -253,8 +253,8 @@ func startServer(){
 		signature := makeHmac(credentials, []byte(requestToSign.StringToSign))
 		awsCredentials := AWSCredentials{
 			AccessKeyID: awsAccessKeyId,
-			Region: awsRegion,
-			Signature: signature,
+			Region:      awsRegion,
+			Signature:   signature,
 		}
 		c.JSON(200, awsCredentials)
 	})
@@ -266,7 +266,7 @@ func startServer(){
 		}
 		c.JSON(200, images)
 	})
-	r.POST("/upload_image", func(c *gin.Context){
+	r.POST("/upload_image", func(c *gin.Context) {
 		req := c.Request
 		//parse multipart form
 		if err := req.ParseMultipartForm(0); err != nil {
@@ -311,7 +311,7 @@ func listS3images(bucketName string) ([]*types.Image, error) {
 		Region: aws.String("us-east-1"),
 	}))
 	params := &s3.ListObjectsInput{
-		Bucket:        aws.String(bucketName),
+		Bucket: aws.String(bucketName),
 	}
 	//each object is an image
 	output, err := s3svc.ListObjects(params)
@@ -321,8 +321,8 @@ func listS3images(bucketName string) ([]*types.Image, error) {
 	images := make([]*types.Image, len(output.Contents))
 	for _, obj := range output.Contents {
 		params := &s3.GetObjectInput{
-			Bucket:        aws.String(bucketName),
-			Key: 	       obj.Key,
+			Bucket: aws.String(bucketName),
+			Key:    obj.Key,
 		}
 		output, err := s3svc.GetObject(params)
 		if err != nil {
