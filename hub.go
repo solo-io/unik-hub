@@ -78,6 +78,18 @@ func startServer() {
 	}
 	svc := s3.New(session.New(&aws.Config{Region: aws.String(awsRegion)}))
 	r := gin.Default()
+	//Create a bucket for a UnikHubClient
+	r.POST("/create_bucket/:name", func(c *gin.Context) {
+		name := c.Param("name")
+		params := &s3.CreateBucketInput{
+			Bucket: aws.String(name),
+		}
+		if _, err := svc.CreateBucket(params); err != nil {
+			c.Error(err)
+		}
+		c.String(201, "bucket created")
+	})
+
 	// Validate the request sent by the UnikHubClient
 	r.POST("/validate", func(c *gin.Context) {
 		// Exctract the information sent by the UnikHubClient
