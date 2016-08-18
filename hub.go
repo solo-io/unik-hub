@@ -20,45 +20,11 @@ import (
 	"strings"
 )
 
+const unik_image_info = "Unik-Image-Info"
+
 var awsAccessKeyId, awsSecretAccessKey, awsRegion, awsBucket string
 
 func main() {
-	startServer()
-}
-
-type RequestToValidate struct {
-	Method string      `json:"method"`
-	Path   string      `json:"path"`
-	Query  url.Values  `json:"query"`
-	Header http.Header `json:"headers"`
-}
-
-type ValidationResponse struct {
-	Message     string `json:"message"`
-	AccessKeyID string `json:"access_key_id"`
-	Region      string `json:"region"`
-	Bucket      string `json:"bucket"`
-}
-
-type RequestToSign struct {
-	FormattedShortTime string `json:"formatted_short_time"`
-	ServiceName        string `json:"service_name"`
-	StringToSign       string `json:"string_to_sign"`
-}
-
-type AWSCredentials struct {
-	AccessKeyID string `json:"access_key_id"`
-	Region      string `json:"region"`
-	Signature   []byte `json:"signature"`
-}
-
-func makeHmac(key []byte, data []byte) []byte {
-	hash := hmac.New(sha256.New, key)
-	hash.Write(data)
-	return hash.Sum(nil)
-}
-
-func startServer() {
 	// Check if the s3 environment variables have been provided
 	awsAccessKeyId = os.Getenv("AWS_ACCESS_KEY_ID")
 	if awsAccessKeyId == "" {
@@ -78,17 +44,6 @@ func startServer() {
 	}
 	svc := s3.New(session.New(&aws.Config{Region: aws.String(awsRegion)}))
 	r := gin.Default()
-	//Create a bucket for a UnikHubClient
-	r.POST("/create_bucket/:name", func(c *gin.Context) {
-		name := c.Param("name")
-		params := &s3.CreateBucketInput{
-			Bucket: aws.String(name),
-		}
-		if _, err := svc.CreateBucket(params); err != nil {
-			c.Error(err)
-		}
-		c.String(201, "bucket created")
-	})
 
 	// Validate the request sent by the UnikHubClient
 	r.POST("/validate", func(c *gin.Context) {
@@ -271,7 +226,7 @@ func startServer() {
 		c.JSON(200, awsCredentials)
 	})
 	r.GET("/images", func(c *gin.Context) {
-		images, err := listS3images("default-bucket")
+		images, err := listS3images(awsBucket)
 		if err != nil {
 			c.Error(err)
 			return
@@ -318,9 +273,41 @@ func startServer() {
 	r.Run() // listen and server on 0.0.0.0:8080
 }
 
+type RequestToValidate struct {
+	Method string      `json:"method"`
+	Path   string      `json:"path"`
+	Query  url.Values  `json:"query"`
+	Header http.Header `json:"headers"`
+}
+
+type ValidationResponse struct {
+	Message     string `json:"message"`
+	AccessKeyID string `json:"access_key_id"`
+	Region      string `json:"region"`
+	Bucket      string `json:"bucket"`
+}
+
+type RequestToSign struct {
+	FormattedShortTime string `json:"formatted_short_time"`
+	ServiceName        string `json:"service_name"`
+	StringToSign       string `json:"string_to_sign"`
+}
+
+type AWSCredentials struct {
+	AccessKeyID string `json:"access_key_id"`
+	Region      string `json:"region"`
+	Signature   []byte `json:"signature"`
+}
+
+func makeHmac(key []byte, data []byte) []byte {
+	hash := hmac.New(sha256.New, key)
+	hash.Write(data)
+	return hash.Sum(nil)
+}
+
 func listS3images(bucketName string) ([]*types.Image, error) {
 	s3svc := s3.New(session.New(&aws.Config{
-		Region: aws.String("us-east-1"),
+		Region: aws.String(awsRegion),
 	}))
 	params := &s3.ListObjectsInput{
 		Bucket: aws.String(bucketName),
@@ -332,17 +319,17 @@ func listS3images(bucketName string) ([]*types.Image, error) {
 	}
 	images := make([]*types.Image, len(output.Contents))
 	for _, obj := range output.Contents {
-		params := &s3.GetObjectInput{
+		params := &s3.HeadObjectInput{
 			Bucket: aws.String(bucketName),
 			Key:    obj.Key,
 		}
-		output, err := s3svc.GetObject(params)
+		output, err := s3svc.HeadObject(params)
 		if err != nil {
 			return nil, err
 		}
 		//get metadata for each object
 		//metadata represents the json-serialized Image metadata
-		metadata := output.Metadata["metadata"]
+		metadata := output.Metadata[unik_image_info]
 		var image *types.Image
 		if err := json.Unmarshal([]byte(*metadata), image); err != nil {
 			return nil, err
@@ -370,7 +357,7 @@ func uploadFileS3(bucketName string, file *os.File, metadata string) error {
 		ContentType:   aws.String("application/octet-stream"),
 	}
 	s3svc := s3.New(session.New(&aws.Config{
-		Region: aws.String("us-east-1"),
+		Region: aws.String(awsRegion),
 	}))
 	if _, err := s3svc.PutObject(params); err != nil {
 		return err
