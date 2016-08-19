@@ -7,11 +7,11 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/emc-advanced-dev/pkg/errors"
 	"github.com/emc-advanced-dev/unik/pkg/types"
 	"github.com/gin-gonic/gin"
 	"github.com/pborman/uuid"
 	"golang.org/x/crypto/bcrypt"
-	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -65,13 +65,15 @@ func main() {
 		// Check that the path sent by the UnikHubClient is following the format /bucket/user/image/version
 		if len(pathArray) != 4 {
 			c.JSON(401, ValidationResponse{
-				Message: "Invalid path provided by the UnikHubClient: "+path,
+				Message: "Invalid path provided by the UnikHubClient: " + path,
 			})
 			return
 		}
 		user := strings.Split(path, "/")[1]
 		image := strings.Split(path, "/")[2]
 		version := strings.Split(path, "/")[3]
+
+		//log.Printf("VALIDATING REQUEST:\nmethod: %v\npath: %v\nemail: %v\npassword: %v\naccess: %v\nuser: %v\nimage: %v\nversion: %v", method, path, email, password, access, user, image, version)
 
 		// If this is a UnikHubClient push request (and not a part or the completion of a multipart upload)
 		if (method == "POST" && requestToValidate.Query.Get("uploadId") == "") || (method == "PUT" && requestToValidate.Query.Get("partNumber") == "") {
@@ -234,42 +236,68 @@ func main() {
 		log.Printf("returned images: %v", images)
 		c.JSON(200, images)
 	})
-	r.POST("/upload_image", func(c *gin.Context) {
-		req := c.Request
-		//parse multipart form
-		if err := req.ParseMultipartForm(0); err != nil {
-			c.Error(err)
-			return
-		}
-		//get file from request
-		uploadedFile, _, err := req.FormFile("form_file_name")
+	r.DELETE("/delete_image", func(c *gin.Context) {
+		body, err := ioutil.ReadAll(c.Request.Body)
 		if err != nil {
 			c.Error(err)
 			return
 		}
-		//copy file to disk
-		tmpFile, err := ioutil.TempFile("", "")
+		var creds struct {
+			Username string `json:"user"`
+			Password string `json:"pass"`
+			Key      string `json:"key"`
+		}
+		if err := json.Unmarshal(body, &creds); err != nil {
+			c.Error(err)
+			return
+		}
+		key := creds.Key
+		username := creds.Username
+		password := creds.Password
+
+		//validate user credentials first
+		// If the access is private, check if the password provided it the correct one
+		if password == "" {
+			c.JSON(401, ValidationResponse{
+				Message: "Password must be provided to delete an image",
+			})
+			return
+		}
+		headParams := &s3.HeadObjectInput{
+			Bucket: aws.String(awsBucket),
+			Key:    aws.String(key),
+		}
+		resp, headErr := svc.HeadObject(headParams)
+		if headErr != nil {
+			c.JSON(401, ValidationResponse{
+				Message: "Can't retrieve information about the object " + key + ": " + err.Error(),
+			})
+			return
+		}
+		if username != *resp.Metadata["Unik-Email"] {
+			c.JSON(401, ValidationResponse{
+				Message: "Can't object belongs to user " + *resp.Metadata["Unik-Email"] + ", you gave me " + username,
+			})
+			return
+		}
+		err = bcrypt.CompareHashAndPassword([]byte(*resp.Metadata["Unik-Password"]), []byte(password))
 		if err != nil {
-			c.Error(err)
-			return
-		}
-		defer os.Remove(tmpFile.Name())
-		if _, err := io.Copy(tmpFile, uploadedFile); err != nil {
-			c.Error(err)
+			c.JSON(401, ValidationResponse{
+				Message: "Wrong password provided: " + err.Error(),
+			})
 			return
 		}
 
-		//get metadata from request
-		//metadata represents the json-serialized Image metadata
-		metadata := req.FormValue("metadata")
-
-		//upload file to s3
-		if err := uploadFileS3("default-bucket", tmpFile, metadata); err != nil {
-			c.Error(err)
+		params := &s3.DeleteObjectInput{
+			Bucket: aws.String(awsBucket),
+			Key:    aws.String(creds.Key),
+		}
+		result, err := s3.New(session.New(&aws.Config{Region: aws.String(awsRegion)})).DeleteObject(params)
+		if err != nil {
+			c.Error(errors.New("deleting image on s3 backend", err))
 			return
 		}
-
-		c.JSON(201, "Image Created")
+		c.String(204, result.String())
 	})
 	r.Run(":80")
 }
