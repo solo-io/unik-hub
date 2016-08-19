@@ -63,15 +63,15 @@ func main() {
 		access := requestToValidate.Header.Get("X-Amz-Meta-Unik-Access")
 		pathArray := strings.Split(path, "/")
 		// Check that the path sent by the UnikHubClient is following the format /bucket/user/image/version
-		if len(pathArray) != 5 {
+		if len(pathArray) != 4 {
 			c.JSON(401, ValidationResponse{
-				Message: "Invalid path provided by the UnikHubClient",
+				Message: "Invalid path provided by the UnikHubClient: "+path,
 			})
 			return
 		}
-		user := strings.Split(path, "/")[2]
-		image := strings.Split(path, "/")[3]
-		version := strings.Split(path, "/")[4]
+		user := strings.Split(path, "/")[1]
+		image := strings.Split(path, "/")[2]
+		version := strings.Split(path, "/")[3]
 
 		// If this is a UnikHubClient push request (and not a part or the completion of a multipart upload)
 		if (method == "POST" && requestToValidate.Query.Get("uploadId") == "") || (method == "PUT" && requestToValidate.Query.Get("partNumber") == "") {
@@ -231,6 +231,7 @@ func main() {
 			c.Error(err)
 			return
 		}
+		log.Printf("returned images: %v", images)
 		c.JSON(200, images)
 	})
 	r.POST("/upload_image", func(c *gin.Context) {
@@ -270,7 +271,7 @@ func main() {
 
 		c.JSON(201, "Image Created")
 	})
-	r.Run() // listen and server on 0.0.0.0:8080
+	r.Run(":80")
 }
 
 type RequestToValidate struct {
@@ -317,7 +318,7 @@ func listS3images(bucketName string) ([]*types.Image, error) {
 	if err != nil {
 		return nil, err
 	}
-	images := make([]*types.Image, len(output.Contents))
+	images := []*types.Image{}
 	for _, obj := range output.Contents {
 		params := &s3.HeadObjectInput{
 			Bucket: aws.String(bucketName),
@@ -330,12 +331,15 @@ func listS3images(bucketName string) ([]*types.Image, error) {
 		//get metadata for each object
 		//metadata represents the json-serialized Image metadata
 		metadata := output.Metadata[unik_image_info]
-		var image *types.Image
-		if err := json.Unmarshal([]byte(*metadata), image); err != nil {
+		if metadata == nil {
+			continue
+		}
+		log.Printf("metadata: %v", *metadata)
+		var image types.Image
+		if err := json.Unmarshal([]byte(*metadata), &image); err != nil {
 			return nil, err
 		}
-
-		images = append(images, image)
+		images = append(images, &image)
 	}
 	return images, nil
 }
