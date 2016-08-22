@@ -31,3 +31,11 @@ resource "aws_instance" "unik-hub" {
   }
   key_name = "${var.key_name}"
 }
+
+resource "aws_route53_record" "hub" {
+   zone_id = "${var.route53_zone_id}"
+   name = "${var.route_name}"
+   type = "A"
+   ttl = "300"
+   records = ["${aws_instance.unik-hub.public_ip}"]
+}
