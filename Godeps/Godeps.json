@@ -117,6 +117,10 @@
 			"Rev": "188bbc645efb550a8d59d343b23e2b9a9b87a2f9"
 		},
 		{
+			"ImportPath": "github.com/emc-advanced-dev/pkg/errors",
+			"Rev": "96dbf45cb1950972c03965dedb6f4572d451528f"
+		},
+		{
 			"ImportPath": "github.com/emc-advanced-dev/unik/pkg/config",
 			"Comment": "0.0-352-g2318c67",
 			"Rev": "2318c676bb3bae6a5226a7ed1e7f868093bfb3d0"
