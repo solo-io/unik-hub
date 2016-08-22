@@ -215,7 +215,7 @@ func listS3images(bucketName string) ([]*types.UserImage, error) {
 		}
 		//get metadata for each object
 		//metadata represents the json-serialized Image metadata
-		user := output.Metadata["unik-email"]
+		user := output.Metadata["Unik-Email"]
 		if user == nil {
 			continue
 		}
@@ -230,7 +230,7 @@ func listS3images(bucketName string) ([]*types.UserImage, error) {
 		}
 		images = append(images, &types.UserImage{
 			Image: &image,
-			User:  *user,
+			Owner:  *user,
 		})
 	}
 	return images, nil
@@ -242,6 +242,7 @@ func validate(svc *s3.S3, requestToValidate RequestToValidate) (err error) {
 	password := requestToValidate.Pass
 	access := requestToValidate.Header.Get("X-Amz-Meta-Unik-Access")
 	email := requestToValidate.Header.Get("X-Amz-Meta-Unik-Email")
+	requestToValidate.Header.Del("X-Amz-Meta-Unik-Email")
 	pathArray := strings.Split(path, "/")
 	// Check that the path sent by the UnikHubClient is following the format /bucket/user/image/version
 	if len(pathArray) != 4 {
@@ -306,15 +307,15 @@ func validate(svc *s3.S3, requestToValidate RequestToValidate) (err error) {
 			return err
 		}
 
-		userSizeTotal := 0
+		var userSizeTotal int64
 
 		//unique names check
-		for _, image := range images {
-			if image.Name == image {
-				return errors.New("image names must be unique, "+image+" is taken", err)
+		for _, userImage := range images {
+			if userImage.Name == image {
+				return errors.New("image names must be unique, "+ userImage.Name +" is taken", err)
 			}
-			if image.User == user {
-				userSizeTotal += image.SizeMb
+			if userImage.Owner == user {
+				userSizeTotal += userImage.SizeMb
 			}
 		}
 
@@ -326,7 +327,7 @@ func validate(svc *s3.S3, requestToValidate RequestToValidate) (err error) {
 			}
 		}
 
-		userSizeLimitMB := userSizeLimitGB << 20
+		userSizeLimitMB := int64(userSizeLimitGB << 20)
 		if userSizeTotal >= userSizeLimitMB {
 			return errors.New(fmt.Sprintf("user has reached size limit of %v mb", userSizeLimitMB), nil)
 		}
