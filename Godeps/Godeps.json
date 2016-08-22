@@ -122,13 +122,13 @@
 		},
 		{
 			"ImportPath": "github.com/emc-advanced-dev/unik/pkg/config",
-			"Comment": "0.0-352-g2318c67",
-			"Rev": "2318c676bb3bae6a5226a7ed1e7f868093bfb3d0"
+			"Comment": "0.0-366-g4dc4b36",
+			"Rev": "4dc4b36e9625a9f5df2a5f58e92e8024cf89678b"
 		},
 		{
 			"ImportPath": "github.com/emc-advanced-dev/unik/pkg/types",
-			"Comment": "0.0-352-g2318c67",
-			"Rev": "2318c676bb3bae6a5226a7ed1e7f868093bfb3d0"
+			"Comment": "0.0-366-g4dc4b36",
+			"Rev": "4dc4b36e9625a9f5df2a5f58e92e8024cf89678b"
 		},
 		{
 			"ImportPath": "github.com/gin-gonic/gin",
